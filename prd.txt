@@ -1,0 +1,328 @@
+# 供应商信息管理工具集成PRD
+
+## 概述
+
+本文档描述了将 wei-assistant-gpu 项目中的供应商信息管理功能转移到 wei-server-mcp 的 tools.rs 模块中的需求。通过将供应商管理功能集成为MCP工具，我们可以通过统一的接口来提供供应商信息的管理能力，使其能够通过API被其他服务调用。
+
+## 核心功能
+
+1. **添加供应商信息**
+   - 支持通过JSON格式添加完整的供应商记录
+   - 允许指定各个字段单独添加供应商记录
+   - 提供字段验证确保数据完整性
+
+2. **查询供应商信息**
+   - 支持多条件筛选查询
+   - 支持相等、大于、小于等多种比较操作符
+   - 支持NULL值处理和模糊查询
+
+3. **数据导出与展示**
+   - 提供JSON格式输出结果
+   - 支持导出查询结果到CSV文件
+
+## 技术架构
+
+### 系统组件
+
+1. **数据层**
+   - 使用SQLite数据库存储供应商信息
+   - 保持与原wei-assistant-gpu相同的数据结构
+   - 数据库文件保存在可配置的位置
+
+2. **工具层**
+   - 在tools.rs中实现多个独立工具函数，每个对应一个供应商管理功能
+   - 使用MCP框架的工具注册机制向服务器注册这些功能
+   - 工具函数采用异步设计，符合MCP框架的要求
+
+3. **集成层**
+   - 在main.rs中注册所有供应商管理工具
+   - 确保工具能够被客户端正确发现和调用
+
+### 数据模型
+
+1. **Supplier结构**
+   - 保持与原始项目相同的字段定义
+   - 添加必要的序列化/反序列化支持
+   - 支持JSON格式的输入和输出
+
+2. **查询过滤器**
+   - 实现QueryBuilder模式以支持复杂查询
+   - 支持多种比较操作符和字段类型
+
+### 接口设计
+
+以下是需要实现的MCP工具接口：
+
+1. **AddSupplier**
+   - 参数：JSON格式的供应商信息或各个字段参数
+   - 响应：成功/失败信息
+   - 描述：添加新的供应商记录到数据库
+
+2. **QuerySuppliers**
+   - 参数：可选的过滤条件
+   - 响应：符合条件的供应商记录列表（JSON格式）
+   - 描述：根据条件查询供应商信息
+
+3. **ExportToCsv**
+   - 参数：过滤条件，导出文件路径
+   - 响应：导出结果信息
+   - 描述：将查询结果导出为CSV文件
+
+## 开发路线图
+
+### 阶段1：基础功能迁移
+
+1. **数据库初始化**
+   - 在tools.rs中实现数据库初始化功能
+   - 确保数据表结构与原项目一致
+   - 添加数据库路径配置支持
+
+2. **基本工具实现**
+   - 实现AddSupplier工具
+   - 实现QuerySuppliers基础版本
+   - 工具注册和响应处理
+
+### 阶段2：高级功能完善
+
+1. **查询功能增强**
+   - 实现完整的QueryBuilder
+   - 支持复杂条件组合
+   - 添加排序和分页功能
+
+2. **数据导出功能**
+   - 实现CSV导出工具
+   - 添加格式化输出选项
+
+### 阶段3：集成与测试
+
+1. **工具注册与集成**
+   - 在main.rs中注册所有供应商管理工具
+   - 确保工具能被正确发现
+
+2. **单元测试编写**
+   - 为每个工具编写完整的单元测试
+   - 测试各种边缘情况和错误处理
+
+## 逻辑依赖链
+
+1. **基础设施先行**
+   - 先实现数据库初始化和基本数据结构
+   - 确保数据库操作函数可用
+
+2. **核心功能优先**
+   - 实现添加和基本查询功能
+   - 确保基本的数据流动可行
+
+3. **高级功能递进**
+   - 在基本功能稳定后添加高级查询
+   - 最后实现导出和格式化功能
+
+## 风险和缓解措施
+
+1. **技术挑战**
+   - 风险：MCP框架与原有SQLite操作的集成可能存在兼容性问题
+   - 缓解：先进行小规模概念验证，确保两者能够协同工作
+
+2. **性能考量**
+   - 风险：频繁的数据库操作可能影响服务响应时间
+   - 缓解：考虑添加缓存层，减少直接数据库访问
+
+3. **资源限制**
+   - 风险：SQLite在高并发场景下的限制
+   - 缓解：添加连接池和事务控制，必要时考虑迁移到更强大的数据库系统
+
+## 附录
+
+### 供应商表结构
+
+```sql
+CREATE TABLE IF NOT EXISTS suppliers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, -- 主键，自增
+    contact TEXT NOT NULL,               -- 联系人
+    wechat TEXT,                         -- 微信
+    phone TEXT,                          -- 电话
+    quantity INTEGER,                    -- 数量
+    location TEXT,                       -- 地点
+    price REAL,                          -- 价格
+    bandwidth_price REAL,                -- 带宽价格
+    storage_price REAL,                  -- 存储价格
+    min_contract_period TEXT,            -- 最短合同期
+    breach_penalties TEXT,               -- 违约金
+    payment_terms TEXT,                  -- 付款方式
+    server_name TEXT,                    -- 服务器名称
+    server_config TEXT,                  -- 服务器配置
+    rental_model TEXT,                   -- 租赁模式
+    networking_category TEXT             -- 网络类型
+);
+```
+
+### MCP工具示例
+
+```rust
+#[tool(
+    name = "AddSupplier",
+    description = "添加供应商信息",
+    params(
+        json = "JSON格式的供应商信息(可选)",
+        contact = "联系人",
+        // ...其他字段...
+    )
+)]
+pub async fn add_supplier_tool(
+    json: Option<String>,
+    contact: Option<String>,
+    // ...其他参数...
+) -> Result<ToolResponseContent> {
+    // 实现代码
+    Ok(tool_text_content!("供应商信息添加成功".to_string()))
+}
+```
+
+# 概述  
+Wei-Server-MCP 是一个MCP协议服务器，它需要扩展功能以支持与Wei-Assistant-GPU的集成。此集成将允许Wei-Server-MCP通过wei-run库提供的函数调用Wei-Assistant-GPU中的功能，丰富服务器的能力。
+
+# 核心功能  
+- 通过wei-run库函数调用Wei-Assistant-GPU的功能
+- 在tools.rs中实现集成接口
+- 使用wei-run提供的函数作为执行命令的方式
+- 在服务器中提供GPU辅助的AI推理能力
+
+# 用户体验  
+- 用户可以透明地访问GPU加速的AI功能
+- 无需理解底层实现，仅通过API调用即可获得Wei-Assistant-GPU提供的能力
+- 保持API一致性和可靠性
+
+# 技术架构  
+## 系统组件
+- Wei-Server-MCP: 主服务器，提供API接口和工具函数
+- Wei-Assistant-GPU: 上级目录中的GPU加速AI助手
+- Wei-Run: 作为Rust库导入，提供执行命令的功能
+
+## 集成方式
+- 在tools.rs中添加新的工具函数，用于与Wei-Assistant-GPU交互
+- 使用wei-run库中的run和run_async函数调用wei-assistant-gpu命令
+- 处理命令执行的输出并转换为服务可用的格式
+
+## 接口定义
+- 工具函数应遵循现有的#[tool]宏格式
+- 输入参数应映射到Wei-Assistant-GPU所需的命令行参数
+- 输出应处理为ToolResponseContent格式
+
+# 开发路线图  
+## MVP要求
+1. 在tools.rs中实现基本的Wei-Assistant-GPU调用功能
+   - 导入wei-run库并使用其函数调用命令
+   - 处理命令输出和错误
+   - 提供基本参数映射
+
+2. 支持核心Wei-Assistant-GPU功能
+   - 实现文本生成调用
+   - 实现向量嵌入调用
+   - 实现模型加载和卸载
+
+3. 错误处理和日志
+   - 捕获并处理执行错误
+   - 提供详细日志以便调试
+   - 实现超时机制
+
+## 未来增强
+1. 功能扩展
+   - 支持更多Wei-Assistant-GPU特性
+   - 添加缓存机制提高性能
+   - 实现批处理能力
+
+2. 性能优化
+   - 添加连接池管理
+   - 实现异步执行多个命令
+   - 优化内存使用
+
+3. 集成测试
+   - 添加针对Wei-Assistant-GPU集成的自动化测试
+   - 创建压力测试用例
+   - 实现端到端测试
+
+# 逻辑依赖链
+1. 基础设施准备
+   - 添加wei-run库作为项目依赖
+   - 确认Wei-Assistant-GPU的路径和可用性
+   - 添加必要的错误处理和日志记录功能
+
+2. 命令执行框架
+   - 实现通用命令执行函数，封装wei-run的调用
+   - 测试基本命令调用是否成功
+
+3. 功能实现顺序
+   - 先实现基础文本处理功能
+   - 再实现模型管理功能
+   - 最后实现高级特性
+
+4. 集成和测试
+   - 在每个功能点完成后进行集成测试
+   - 添加单元测试确保功能正确性
+   - 进行端到端测试验证整体流程
+
+# 风险与缓解  
+## 技术挑战
+- **风险**: Wei-Assistant-GPU接口可能会变更
+  **缓解**: 设计适配层以隔离接口变化的影响
+
+- **风险**: 进程间通信可能导致性能问题
+  **缓解**: 实现异步调用和结果缓存
+
+- **风险**: GPU资源竞争可能导致性能下降
+  **缓解**: 实现资源管理和队列机制
+
+## MVP确定
+- **风险**: 功能范围不明确导致开发延期
+  **缓解**: 明确定义核心功能并分阶段实现
+
+- **风险**: 与现有系统集成的复杂性
+  **缓解**: 采用清晰的接口设计和充分测试
+
+## 资源约束
+- **风险**: GPU资源有限
+  **缓解**: 实现资源管理和优先级机制
+
+- **风险**: 开发时间限制
+  **缓解**: 优先实现核心功能，后续迭代添加高级特性
+
+# 附录  
+## Wei-Run函数接口
+wei-run库提供的主要函数:
+```rust
+// 同步执行命令，返回命令输出
+pub fn run(cmd: &str, param: Vec<&str>) -> Result<String, Box<dyn std::error::Error>>
+
+// 异步执行命令，不等待结果
+pub fn run_async(cmd: &str, param: Vec<&str>) -> Result<(), Box<dyn std::error::Error>>
+
+// 直接执行具体命令，不做路径搜索
+pub fn command(cmd: &str, param: Vec<&str>) -> Result<String, Box<dyn std::error::Error>>
+
+// 获取命令输出的完整内容（包括标准输出和标准错误）
+pub fn command_output(cmd: &str, param: Vec<&str>) -> Result<std::process::Output, Box<dyn std::error::Error>>
+```
+
+调用示例:
+```rust
+let result = wei_run::run("wei-assistant-gpu", vec!["generate", "--prompt", "你好"])?;
+```
+
+## Wei-Assistant-GPU命令参数
+wei-assistant-gpu的命令包括:
+- generate: 生成文本
+- embed: 创建文本嵌入
+- load: 加载模型
+- unload: 卸载模型
+
+## 技术要求
+- Rust 1.70+
+- wei-run库 (需添加到Cargo.toml依赖中)
+- 错误处理和日志记录库
+- Wei-Assistant-GPU的可用性
+
+## 测试规范
+- 单元测试覆盖所有工具函数
+- 集成测试验证与Wei-Assistant-GPU的交互
+- 性能测试确保在负载下的稳定性
+- 错误测试验证故障恢复能力 
