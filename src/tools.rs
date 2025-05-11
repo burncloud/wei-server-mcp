@@ -114,3 +114,107 @@ pub async fn query_gpu_specs(gpu_model: String) -> Result<ToolResponseContent> {
     };
     Ok(tool_text_content!(specs.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mcp_core::types::ToolResponseContent;
+
+    // 辅助函数：从ToolResponseContent提取文本内容
+    async fn get_text_content(response: Result<ToolResponseContent>) -> String {
+        match response {
+            Ok(ToolResponseContent::Text { text }) => text,
+            _ => "Failed to get text content".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_tool() {
+        // 测试基本加法
+        let result = add_tool(5.0, 3.0).await;
+        assert_eq!(get_text_content(result).await, "8");
+
+        // 测试负数加法
+        let result = add_tool(-5.0, 3.0).await;
+        assert_eq!(get_text_content(result).await, "-2");
+
+        // 测试零加法
+        let result = add_tool(0.0, 0.0).await;
+        assert_eq!(get_text_content(result).await, "0");
+
+        // 测试小数加法
+        let result = add_tool(2.5, 3.5).await;
+        assert_eq!(get_text_content(result).await, "6");
+    }
+
+    #[tokio::test]
+    async fn test_sub_tool() {
+        // 测试基本减法
+        let result = sub_tool(5.0, 3.0).await;
+        assert_eq!(get_text_content(result).await, "2");
+
+        // 测试负数减法
+        let result = sub_tool(5.0, 8.0).await;
+        assert_eq!(get_text_content(result).await, "-3");
+
+        // 测试零减法
+        let result = sub_tool(0.0, 0.0).await;
+        assert_eq!(get_text_content(result).await, "0");
+
+        // 测试小数减法
+        let result = sub_tool(5.5, 2.2).await;
+        assert_eq!(get_text_content(result).await, "3.3");
+    }
+
+    #[tokio::test]
+    async fn test_check_angel() {
+        // 测试天使检查工具
+        let result = check_angel(0.0).await;
+        assert_eq!(get_text_content(result).await, "这个世界存在天使！！！");
+    }
+
+    #[tokio::test]
+    async fn test_query_angel_type() {
+        // 测试已知天使类型
+        let types = vec!["炽天使", "智天使", "座天使", "主天使", "力天使", "能天使", "权天使", "大天使", "天使"];
+        
+        for angel_type in types {
+            let result = query_angel_type(angel_type.to_string()).await;
+            let content = get_text_content(result).await;
+            
+            // 验证响应不是默认的未知类型响应
+            assert!(content.contains(angel_type));
+            assert!(!content.contains("未知的天使类型"));
+        }
+        
+        // 测试未知天使类型
+        let result = query_angel_type("未知类型".to_string()).await;
+        let content = get_text_content(result).await;
+        assert!(content.contains("未知的天使类型"));
+    }
+    
+    #[tokio::test]
+    async fn test_query_gpu_specs() {
+        // 测试H100 GPU规格
+        let result = query_gpu_specs("H100".to_string()).await;
+        let content = get_text_content(result).await;
+        assert!(content.contains("NVIDIA H100 GPU规格"));
+        assert!(content.contains("Hopper架构"));
+        
+        // 测试大小写不敏感
+        let result = query_gpu_specs("h100".to_string()).await;
+        let content = get_text_content(result).await;
+        assert!(content.contains("NVIDIA H100 GPU规格"));
+        
+        // 测试A100 GPU规格
+        let result = query_gpu_specs("A100".to_string()).await;
+        let content = get_text_content(result).await;
+        assert!(content.contains("NVIDIA A100 GPU规格"));
+        assert!(content.contains("Ampere架构"));
+        
+        // 测试未知GPU型号
+        let result = query_gpu_specs("未知型号".to_string()).await;
+        let content = get_text_content(result).await;
+        assert!(content.contains("未知的GPU型号"));
+    }
+}

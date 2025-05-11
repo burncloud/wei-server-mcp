@@ -134,3 +134,151 @@ async fn main()->Result<(), anyhow::Error>  {
     tracing::info!("Agent response: {:?}", response);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::remove_file;
+    use std::net::TcpListener;
+    
+    // 测试端口可用性检查函数
+    #[test]
+    fn test_is_port_available() {
+        // 查找一个可用端口
+        let start_port = 50000;
+        let available_port = find_available_port(start_port).unwrap();
+        
+        // 验证端口可用
+        assert!(is_port_available(available_port));
+        
+        // 占用该端口
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", available_port)).unwrap();
+        
+        // 验证端口不再可用
+        assert!(!is_port_available(available_port));
+        
+        // 释放占用的资源
+        drop(listener);
+        
+        // 端口应该再次可用
+        assert!(is_port_available(available_port));
+    }
+    
+    // 测试查找可用端口函数
+    #[test]
+    fn test_find_available_port() {
+        // 查找可用端口
+        let start_port = 50100;
+        let port1 = find_available_port(start_port).unwrap();
+        
+        // 端口应该大于等于起始端口
+        assert!(port1 >= start_port);
+        
+        // 占用第一个找到的端口
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", port1)).unwrap();
+        
+        // 再次查找应该找到不同的端口
+        let port2 = find_available_port(start_port).unwrap();
+        assert_ne!(port1, port2);
+        
+        // 释放资源
+        drop(listener);
+    }
+    
+    // 测试端口保存和读取功能
+    #[test]
+    fn test_port_file_operations() {
+        // 测试用的端口号
+        let test_port = 51000;
+        let test_file = "wei-server-mcp-test.dat";
+        
+        // 清理可能存在的测试文件
+        let _ = remove_file(test_file);
+        
+        // 保存端口到文件
+        fs::write(test_file, test_port.to_string()).unwrap();
+        
+        // 读取文件内容
+        let contents = fs::read_to_string(test_file).unwrap();
+        let read_port = contents.trim().parse::<u16>().unwrap();
+        
+        // 验证读取的端口与写入的相同
+        assert_eq!(test_port, read_port);
+        
+        // 清理测试文件
+        let _ = remove_file(test_file);
+    }
+    
+    // 测试端口自增功能
+    #[test]
+    fn test_port_increment() {
+        // 查找一个可用端口作为起点
+        let start_port = 52000;
+        let port1 = find_available_port(start_port).unwrap();
+        
+        // 占用这个端口
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", port1)).unwrap();
+        
+        // 从相同的起始端口开始查找，应该找到下一个可用端口
+        let port2 = find_available_port(start_port).unwrap();
+        
+        // 第二个端口应该大于第一个
+        assert!(port2 > port1);
+        
+        // 释放资源
+        drop(listener);
+    }
+    
+    // 测试完整的端口分配流程
+    #[test]
+    fn test_port_allocation_workflow() {
+        // 测试文件名
+        let test_file = "wei-server-mcp-test-workflow.dat";
+        
+        // 清理可能存在的测试文件
+        let _ = remove_file(test_file);
+        
+        // 初始端口
+        let initial_port = 53000;
+        
+        // 写入初始端口到文件
+        fs::write(test_file, initial_port.to_string()).unwrap();
+        
+        // 读取端口
+        let contents = fs::read_to_string(test_file).unwrap();
+        let read_port = contents.trim().parse::<u16>().unwrap();
+        assert_eq!(initial_port, read_port);
+        
+        // 占用初始端口
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", initial_port)).unwrap();
+        
+        // 模拟主程序中的端口分配逻辑
+        let file_port = if let Ok(contents) = fs::read_to_string(test_file) {
+            if let Ok(port) = contents.trim().parse::<u16>() {
+                port
+            } else {
+                initial_port
+            }
+        } else {
+            initial_port
+        };
+        
+        // 查找可用端口
+        let allocated_port = find_available_port(file_port).unwrap();
+        
+        // 分配的端口应该大于初始端口（因为初始端口已被占用）
+        assert!(allocated_port > initial_port);
+        
+        // 保存新的端口到文件
+        fs::write(test_file, allocated_port.to_string()).unwrap();
+        
+        // 验证文件已更新
+        let new_contents = fs::read_to_string(test_file).unwrap();
+        let new_port = new_contents.trim().parse::<u16>().unwrap();
+        assert_eq!(allocated_port, new_port);
+        
+        // 清理资源
+        drop(listener);
+        let _ = remove_file(test_file);
+    }
+}
